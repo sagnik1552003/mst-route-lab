@@ -1,222 +1,99 @@
-import { useEffect, useMemo, useState } from 'react';
-import { buildFrames, formatKm, PHASES } from '../lib/tspFrames.js';
+import { useEffect, useState } from 'react';
+import { km } from '../lib/geo.js';
 
-// Step-by-step player for one MST-preorder run. Owns only playback state;
-// drawing is the parent's job — every frame change is reported through
-// onFrame(frame), and every frame is a full snapshot (lib/tspFrames.js),
-// so scrubbing backwards is as cheap as stepping forwards.
-
-const SPEEDS = [
-  { label: '0.5×', ms: 1800 },
-  { label: '1×', ms: 1000 },
-  { label: '2×', ms: 500 },
-  { label: '4×', ms: 250 },
-];
-
-const Icon = ({ d }) => (
-  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {d}
-  </svg>
-);
-
-export function Player({ result, locs, onFrame, onApply, onClose }) {
-  const names = useMemo(() => locs.map((l) => l.name), [locs]);
-  const frames = useMemo(() => buildFrames(result, names), [result, names]);
-  const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
-  const [speedIdx, setSpeedIdx] = useState(1);
+// Generic step player. Frames are full snapshots, so every control is just
+// "show frame i". The parent draws the map from onFrame; `children(frame)`
+// renders the tab-specific panel (a table) under the explanation.
+// It opens on the last frame — the solution — and the steps are there to
+// replay how it was reached.
+export function Player({ frames, onFrame, children }) {
+  const [i, setI] = useState(frames.length - 1);
+  const [playing, setPlaying] = useState(false);
   const last = frames.length - 1;
-  const frame = frames[Math.min(index, last)];
+  const frame = frames[Math.min(i, last)];
 
   useEffect(() => {
-    onFrame(frame);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame]);
+    setI(frames.length - 1);
+    setPlaying(false);
+  }, [frames]);
+
+  useEffect(() => onFrame(frame), [frame, onFrame]);
 
   useEffect(() => {
     if (!playing) return;
-    if (index >= last) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setIndex((i) => Math.min(i + 1, last)), SPEEDS[speedIdx].ms);
+    if (i >= last) return setPlaying(false);
+    const t = setTimeout(() => setI((x) => x + 1), 900);
     return () => clearTimeout(t);
-  }, [playing, index, last, speedIdx]);
+  }, [playing, i, last]);
 
-  const step = (d) => {
+  // at the solution, "play" replays the steps from the beginning
+  const toggle = () => (i >= last ? (setI(0), setPlaying(true)) : setPlaying((p) => !p));
+
+  const go = (d) => {
     setPlaying(false);
-    setIndex((i) => Math.max(0, Math.min(last, i + d)));
-  };
-  const togglePlay = () => {
-    if (index >= last) {
-      setIndex(0);
-      setPlaying(true);
-    } else setPlaying((p) => !p);
+    setI((x) => Math.max(0, Math.min(last, x + d)));
   };
 
-  // ← → step, space plays/pauses, Esc closes. Ignored while typing.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.target.closest && e.target.closest('input[type="text"], input[type="search"], textarea, select')) return;
-      if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
-      else if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); togglePlay(); }
-      else if (e.key === 'Escape') onClose();
+      if (e.target.closest('input, select, textarea')) return;
+      if (e.key === 'ArrowRight') go(1);
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === ' ' && !e.target.closest('button')) {
+        e.preventDefault();
+        toggle();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, last]);
-
-  const phaseIdx = PHASES.findIndex((p) => p.key === frame.phase);
-  const jump = (key) => {
-    const i = frames.findIndex((f) => f.phase === key);
-    if (i >= 0) {
-      setPlaying(false);
-      setIndex(i);
-    }
-  };
-
-  const running =
-    frame.phase === 'prim'
-      ? { label: 'Tree weight', value: frame.treeWeight }
-      : frame.phase === 'walk'
-      ? { label: 'Walked', value: frame.walked }
-      : { label: 'Route so far', value: frame.tourLen };
+  });
 
   return (
-    <section className="card player" aria-label="MST approximation, step by step">
-      <div className="card-head">
-        <span className="eyebrow">Step by step · {locs.length} stops</span>
-        <button type="button" className="icon-btn" onClick={onClose} aria-label="Close and go back to stops">
-          <Icon d={<path d="M6 6l12 12M18 6L6 18" />} />
+    <div className="player">
+      <div className="controls">
+        <button onClick={() => go(-1)} disabled={i === 0} aria-label="Previous step">←</button>
+        <button
+          className="play"
+          onClick={toggle}
+          aria-label={playing ? 'Pause' : i >= last ? 'Show the steps' : 'Play'}
+        >
+          {playing ? 'Pause' : i >= last ? 'Show steps' : 'Play'}
         </button>
-      </div>
-
-      <ol className="phases">
-        {PHASES.map((p, i) => (
-          <li key={p.key}>
-            <button
-              type="button"
-              className={`phase${i === phaseIdx ? ' is-active' : ''}${i < phaseIdx ? ' is-done' : ''}`}
-              onClick={() => jump(p.key)}
-              aria-current={i === phaseIdx ? 'step' : undefined}
-            >
-              <span className="phase-num">{i + 1}</span>
-              <span className="phase-label">{p.label}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
-
-      <div className="player-copy" key={index}>
-        <h2 className="player-title">{frame.title}</h2>
-        <p className="player-text" aria-live="polite">{frame.text}</p>
-      </div>
-
-      <div className="scrub">
-        <div className="scrub-fill" style={{ transform: `scaleX(${last ? index / last : 1})` }} aria-hidden="true" />
+        <button onClick={() => go(1)} disabled={i >= last} aria-label="Next step">→</button>
         <input
           type="range"
           min={0}
           max={last}
-          value={index}
+          value={i}
           onChange={(e) => {
             setPlaying(false);
-            setIndex(Number(e.target.value));
+            setI(Number(e.target.value));
           }}
-          aria-label={`Step ${index + 1} of ${frames.length}`}
+          aria-label="Step"
         />
+        {i < last ? (
+          <button className="link" onClick={() => { setPlaying(false); setI(last); }}>Result</button>
+        ) : (
+          <span className="count">{frames.length} steps</span>
+        )}
       </div>
 
-      <div className="transport">
-        <button type="button" className="t-btn" onClick={() => step(-Infinity)} disabled={index === 0} aria-label="First step">
-          <Icon d={<><path d="M6 5v14" /><path d="M18 6l-8 6 8 6z" /></>} />
-        </button>
-        <button type="button" className="t-btn" onClick={() => step(-1)} disabled={index === 0} aria-label="Previous step">
-          <Icon d={<path d="M15 6l-6 6 6 6" />} />
-        </button>
-        <button type="button" className="t-btn t-play" onClick={togglePlay} aria-label={playing ? 'Pause' : index >= last ? 'Replay' : 'Play'}>
-          {playing ? (
-            <Icon d={<><path d="M9 6v12" /><path d="M15 6v12" /></>} />
-          ) : index >= last ? (
-            <Icon d={<><path d="M4 12a8 8 0 1 0 2.3-5.6" /><path d="M4 4v4h4" /></>} />
-          ) : (
-            <Icon d={<path d="M8 5l11 7-11 7z" />} />
-          )}
-        </button>
-        <button type="button" className="t-btn" onClick={() => step(1)} disabled={index >= last} aria-label="Next step">
-          <Icon d={<path d="M9 6l6 6-6 6" />} />
-        </button>
-        <button type="button" className="t-btn" onClick={() => step(Infinity)} disabled={index >= last} aria-label="Last step">
-          <Icon d={<><path d="M18 5v14" /><path d="M6 6l8 6-8 6z" /></>} />
-        </button>
-        <span className="step-count">
-          {index + 1}<span>/{frames.length}</span>
-        </span>
-        <div className="speed" role="radiogroup" aria-label="Playback speed">
-          {SPEEDS.map((s, i) => (
-            <button key={s.label} type="button" role="radio" aria-checked={i === speedIdx} className={i === speedIdx ? 'is-on' : ''} onClick={() => setSpeedIdx(i)}>
-              {s.label}
-            </button>
+      {frame.phase && <p className="phase">{frame.phase}</p>}
+      <h2>{frame.title}</h2>
+      <p className="text">{frame.text}</p>
+
+      {frame.stats && (
+        <dl className="stats">
+          {Object.entries(frame.stats).map(([k, v]) => (
+            <div key={k}>
+              <dt>{k}</dt>
+              <dd>{k === 'Subproblems' ? v.toLocaleString('en-IN') : km(v)}</dd>
+            </div>
           ))}
-        </div>
-      </div>
-
-      <dl className="kv">
-        <div>
-          <dt>MST weight</dt>
-          <dd>{formatKm(result.mstWeight)}</dd>
-        </div>
-        <div>
-          <dt>2 × MST bound</dt>
-          <dd>{formatKm(2 * result.mstWeight)}</dd>
-        </div>
-        <div className="kv-live">
-          <dt>{running.label}</dt>
-          <dd>{formatKm(running.value)}</dd>
-        </div>
-      </dl>
-
-      <Legend phase={frame.phase} />
-
-      {frame.order.length > 0 && (
-        <ol className="preorder" aria-label="Preorder so far">
-          {frame.order.map((v) => (
-            <li key={v} className={frame.nodes[v] === 'current' ? 'is-current' : ''}>
-              {names[v]}
-            </li>
-          ))}
-        </ol>
+        </dl>
       )}
 
-      <div className="actions">
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
-          Back to stops
-        </button>
-        <button type="button" className="btn btn-primary" onClick={() => onApply(result.order)}>
-          Use this order
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function Legend({ phase }) {
-  const items =
-    phase === 'prim'
-      ? [['line tree', 'MST edge'], ['line accent', 'Light edge'], ['line dashed', 'Cheapest link (frontier)']]
-      : phase === 'walk'
-      ? [['line walk', 'Walk down'], ['line walk-dashed', 'Climb back up'], ['line tree faded', 'Tree']]
-      : [['line route', 'Route'], ['line accent-dashed', 'Stretch replaced'], ['dot skipped', 'Revisit skipped']];
-  return (
-    <ul className="legend" aria-hidden="true">
-      {items.map(([cls, label]) => (
-        <li key={label}>
-          <i className={`lg ${cls}`} />
-          {label}
-        </li>
-      ))}
-    </ul>
+      {children && children(frame)}
+    </div>
   );
 }

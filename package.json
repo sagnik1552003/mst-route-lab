@@ -1,7 +1,7 @@
 {
-  "name": "pujo-yatra-mst",
+  "name": "mst-route-lab",
   "private": true,
-  "version": "4.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,6 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
     "vite": "^5.4.8"
   }
 }

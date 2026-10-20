@@ -1,8 +1,7 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { pandalsDevPlugin } from './vite-pandals-dev-plugin.js';
 
+// No React plugin needed: esbuild compiles JSX with the automatic runtime.
 export default defineConfig({
-  plugins: [react(), pandalsDevPlugin()],
-  server: { port: 5173, host: true },
+  esbuild: { jsx: 'automatic' },
+  build: { chunkSizeWarningLimit: 1500 }, // maplibre-gl alone is ~1 MB
 });
