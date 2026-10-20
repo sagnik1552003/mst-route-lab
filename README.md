@@ -28,4 +28,4 @@ Controls: ← / → step, Space plays. Distances are straight-line
 - `src/lib/map.js` — MapLibre layers
 - `src/App.jsx`, `src/components/` — tabs, stops, player, tables
 
-Dependencies: `react`, `react-dom`, `maplibre-gl`; `vite` to build.
+Dependencies: `react`, `react-dom`, `maplibre-gl` 6; `vite` 8 to build. Needs Node 20.19+ or 22.12+.

@@ -8,7 +8,10 @@ map. Split out of Pujo Yatra (https://github.com/sagnik1552003/PujoYatra).
 
 - Keep it minimal. Dependencies are `react`, `react-dom`, `maplibre-gl`,
   `vite` — nothing else. No router, no state library, no backend. JSX is
-  compiled by Vite's esbuild (`vite.config.js`), no React plugin.
+  compiled by Vite itself (automatic runtime), no React plugin.
+- maplibre-gl 6 is ESM-only: import it as a namespace (`import * as
+  maplibregl`), and keep `setWorkerUrl(workerUrl)` in `App.jsx` — the
+  worker is a separate file that breaks once Vite bundles the library.
 - Algorithms in `src/lib/` are pure (no DOM), importable from Node; the
   benchmark (`npm run bench`) uses them directly.
 - Each algorithm exports `xxxFrames(D, names)` → an array of frames. A frame

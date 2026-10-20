@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+// maplibre-gl 6 is ESM with named exports only (no default export). Its
+// worker is a separate file that it looks for next to itself, which breaks
+// once Vite bundles the library, so point it at the file explicitly.
+import * as maplibregl from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import PANDALS from './data/pandals.json';
 import { distanceMatrix } from './lib/geo.js';
@@ -10,6 +14,8 @@ import { MAP_STYLE, addLayers, setPandals, setFrame } from './lib/map.js';
 import { Player } from './components/Player.jsx';
 import { Stops } from './components/Stops.jsx';
 import { PrimTable, HeldKarpTable } from './components/Tables.jsx';
+
+maplibregl.setWorkerUrl(workerUrl);
 
 const TABS = [
   { id: 'hk', label: 'Held–Karp' },
