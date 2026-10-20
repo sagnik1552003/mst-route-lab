@@ -20,6 +20,9 @@ map. Split out of Pujo Yatra (https://github.com/sagnik1552003/PujoYatra).
   frame (it opens on the last one — the solution — and replays from 0); `lib/map.js → setFrame` draws it. Edge kinds: tree, new,
   candidate, faded, dbl, walk, stretch, tour, partial, opt. Node states:
   pending, done, root, current, marked, skipped.
+- The MST-Prim tab has two phases: MST-PRIM, then a preorder walk of the
+  tree (children nearest-first). Its tour is identical to the
+  2-Approximation tab's (Euler circuit of the doubled tree, shortcut).
 - All tours are closed cycles starting at stop 1. Held–Karp is capped at
   `MAX_EXACT` = 13.
 - `npm run build` is the only automated check; verify UI in headless

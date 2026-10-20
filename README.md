@@ -7,7 +7,7 @@ stops on the map, then switch tabs:
 | --- | --- | --- |
 | **Held–Karp** | Dynamic programming over subsets, O(n²·2ⁿ) | The exact optimal tour (up to 13 stops) |
 | **2-Approximation** | MST → double the edges → Eulerian tour (Hierholzer) → shortcut to a Hamiltonian cycle | A tour ≤ 2 × optimal, in O(n²) |
-| **MST-Prim** | CLRS MST-PRIM with the key / π / Q table | A minimum spanning tree |
+| **MST-Prim** | CLRS MST-PRIM with the key / π / Q table, then a preorder walk of the tree | A minimum spanning tree and its preorder tour (≤ 2 × optimal) |
 
 ```bash
 npm install

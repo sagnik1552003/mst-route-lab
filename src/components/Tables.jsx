@@ -2,6 +2,7 @@ import { km } from '../lib/geo.js';
 
 // Prim: the key / π / in-Q arrays after the current operation.
 export function PrimTable({ frame }) {
+  if (frame.preorder) return <PreorderTable p={frame.preorder} />;
   const t = frame.table;
   return (
     <table className="grid">
@@ -15,6 +16,26 @@ export function PrimTable({ frame }) {
             <td>{km(k)}</td>
             <td>{t.pi[v] === -1 ? 'NIL' : t.pi[v] + 1}</td>
             <td>{t.inQ[v] ? 'yes' : '—'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Preorder phase: the visit order so far, with each stop's tree parent.
+function PreorderTable({ p }) {
+  return (
+    <table className="grid">
+      <thead>
+        <tr><th>#</th><th>stop</th><th>π[v]</th></tr>
+      </thead>
+      <tbody>
+        {p.order.map((v, i) => (
+          <tr key={v} className={i === p.order.length - 1 ? 'focus' : ''}>
+            <td>{i + 1}</td>
+            <td>{v + 1}</td>
+            <td>{p.pi[v] === -1 ? 'root' : p.pi[v] + 1}</td>
           </tr>
         ))}
       </tbody>
