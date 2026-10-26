@@ -37,4 +37,9 @@ and the page re-adds them when the scheme changes.
 
 ## External services
 
-OpenFreeMap tiles only (free, no key).
+OpenFreeMap tiles, and OSRM routing at routing.openstreetmap.de (FOSSGIS;
+free, no key, light use only) for the Walking distance mode —
+`src/lib/roads.js`. One `table` request per stop set; route shapes only for
+edges on screen, chained into one `route` request, cached. Walking
+matrices are symmetrised (longer direction) and closed under shortest paths, so the
+algorithms still get a metric. On failure the app falls back to straight lines.

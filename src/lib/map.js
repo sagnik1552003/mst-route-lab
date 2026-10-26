@@ -75,14 +75,21 @@ export function setPandals(map, pandals, inRoute) {
   map.getSource('pandals')?.setData({ type: 'FeatureCollection', features: pandals.map((p, i) => pt(p, { idx: i, name: p.n, inRoute: inRoute.has(i) })) });
 }
 
-/** Draws one frame: edges by kind, stops by state, labelled with their stop number. */
-export function setFrame(map, locs, frame) {
+/**
+ * Draws one frame: edges by kind, stops by state, labelled with their stop
+ * number. `path(from, to)`, if given, returns an edge's road line; edges
+ * without one are drawn straight.
+ */
+export function setFrame(map, locs, frame, path) {
   const nodes = locs.map((l, v) => pt(l, { state: frame ? frame.nodes[v] : 'pending', label: String(v + 1) }));
   const edges = frame
     ? frame.edges.map((e) => ({
         type: 'Feature',
         properties: { kind: e.kind },
-        geometry: { type: 'LineString', coordinates: [[locs[e.from].lng, locs[e.from].lat], [locs[e.to].lng, locs[e.to].lat]] },
+        geometry: {
+          type: 'LineString',
+          coordinates: path?.(e.from, e.to) ?? [[locs[e.from].lng, locs[e.from].lat], [locs[e.to].lng, locs[e.to].lat]],
+        },
       }))
     : [];
   map.getSource('edges')?.setData({ type: 'FeatureCollection', features: edges });

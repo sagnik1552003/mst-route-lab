@@ -10,6 +10,7 @@ import { distanceMatrix } from './lib/geo.js';
 import { primFrames } from './lib/prim.js';
 import { doubleTreeFrames } from './lib/doubleTree.js';
 import { heldKarp, heldKarpFrames, MAX_EXACT } from './lib/heldKarp.js';
+import { roadMatrix, roadRoutes } from './lib/roads.js';
 import { MAP_STYLE, addLayers, setPandals, setFrame } from './lib/map.js';
 import { Player } from './components/Player.jsx';
 import { Stops } from './components/Stops.jsx';
@@ -22,8 +23,13 @@ const TABS = [
   { id: 'approx', label: '2-Approximation' },
   { id: 'prim', label: 'MST-Prim' },
 ];
+const MODES = [
+  { id: 'line', label: 'Straight' },
+  { id: 'walk', label: 'Walking' },
+];
 const MAX_STOPS = 20;
 const KEY = 'mst-stops';
+const MODE_KEY = 'mst-distance';
 const SEED = ['Suruchi Sangha', 'Ekdalia Evergreen Club', 'Singhi Park Sarbojanin', 'Ballygunge Cultural Association', 'Maddox Square', 'Deshapriya Park', 'Tridhara Sammilani', 'Jodhpur Park'];
 
 function initialStops() {
@@ -41,6 +47,10 @@ const dark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
 export default function App() {
   const [tab, setTab] = useState(() => (TABS.some((t) => t.id === location.hash.slice(1)) ? location.hash.slice(1) : 'hk'));
   const [stops, setStops] = useState(initialStops);
+  const [mode, setMode] = useState(() => {
+    try { return MODES.some((m) => m.id === localStorage.getItem(MODE_KEY)) ? localStorage.getItem(MODE_KEY) : 'line'; } catch { return 'line'; }
+  });
+  const [road, setRoad] = useState(null); // walking distances: { locs, D, next } or { locs, error }
   const [styleVersion, setStyleVersion] = useState(0);
   const mapEl = useRef(null);
   const mapRef = useRef(null);
@@ -49,21 +59,49 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(stops)); } catch { /* ignore */ }
   }, [stops]);
+  useEffect(() => {
+    try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
+  }, [mode]);
   useEffect(() => { history.replaceState(null, '', `#${tab}`); }, [tab]);
 
   const locs = useMemo(() => stops.map((i) => ({ name: PANDALS[i].n, lat: PANDALS[i].lat, lng: PANDALS[i].lng })), [stops]);
-  const D = useMemo(() => distanceMatrix(locs), [locs]);
   const names = useMemo(() => locs.map((l) => l.name), [locs]);
 
+  // walking distances: one request per stop set, after clicks have settled
+  useEffect(() => {
+    if (mode === 'line' || locs.length < 3 || (road?.locs === locs && road.D)) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      roadMatrix(locs, ctrl.signal).then(
+        (r) => setRoad({ locs, ...r }),
+        (e) => ctrl.signal.aborted || setRoad({ locs, error: e.message }),
+      );
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [mode, locs, road]);
+  const roadNow = mode !== 'line' && road?.locs === locs ? road : null;
+  const roadLoading = mode !== 'line' && locs.length >= 3 && !roadNow;
+  const roadFailed = !!roadNow?.error;
+
+  // straight lines unless walking distances are in (or failed to arrive)
+  const D = useMemo(
+    () => (roadNow?.D ? roadNow.D : roadLoading ? null : distanceMatrix(locs)),
+    [roadNow, roadLoading, locs],
+  );
+  const routes = useMemo(() => (roadNow?.D ? roadRoutes(locs, roadNow.next) : null), [roadNow, locs]);
+
   const frames = useMemo(() => {
-    if (locs.length < 3) return null;
+    if (locs.length < 3 || !D) return null;
     if (tab === 'prim') return primFrames(D, names);
     if (tab === 'approx') return doubleTreeFrames(D, names);
     return heldKarpFrames(D, names);
   }, [tab, D, names, locs.length]);
 
   // the exact optimum, to put the approximation's result in context
-  const opt = useMemo(() => (tab === 'approx' && locs.length >= 3 && locs.length <= MAX_EXACT ? heldKarp(D) : null), [tab, D, locs.length]);
+  const opt = useMemo(() => (tab === 'approx' && D && locs.length >= 3 && locs.length <= MAX_EXACT ? heldKarp(D) : null), [tab, D, locs.length]);
 
   // ---------- map ----------
   useEffect(() => {
@@ -129,10 +167,16 @@ export default function App() {
     if (styleVersion) setPandals(mapRef.current, PANDALS, inRoute);
   }, [styleVersion, inRoute]);
 
+  // on foot, edges are drawn straight until their walking route has
+  // loaded, then the frame is redrawn
+  const drawRef = useRef(null);
   const draw = useCallback((frame) => {
     frameRef.current = frame;
-    if (mapRef.current) setFrame(mapRef.current, locs, frame);
-  }, [locs]);
+    if (!mapRef.current) return;
+    setFrame(mapRef.current, locs, frame, routes?.path);
+    if (routes && frame) routes.load(frame.edges, () => drawRef.current(frameRef.current));
+  }, [locs, routes]);
+  drawRef.current = draw;
   useEffect(() => {
     if (styleVersion) draw(frames ? frameRef.current : null);
   }, [styleVersion, frames, draw]);
@@ -175,10 +219,33 @@ export default function App() {
         <aside>
           <Stops pandals={PANDALS} stops={stops} setStops={setStops} max={MAX_STOPS} onCluster={cluster} onAdd={addFromSearch} />
 
+          <section className="dist">
+            <div className="row">
+              <h3>Distances</h3>
+              <span className="spacer" />
+              <div className="seg" role="radiogroup" aria-label="Distances">
+                {MODES.map((m) => (
+                  <button key={m.id} role="radio" aria-checked={mode === m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="hint">
+              {mode === 'line'
+                ? 'Straight-line (great-circle) distances.'
+                : roadFailed
+                  ? `Couldn't get walking distances (${roadNow.error}), so these are straight lines.`
+                  : 'Shortest walking routes on OpenStreetMap roads (OSRM).'}
+            </p>
+          </section>
+
           {locs.length < 3 ? (
             <p className="hint">Add at least 3 stops.</p>
           ) : tooMany ? (
             <p className="hint">Held–Karp is exponential: this tab is limited to {MAX_EXACT} stops. Remove {locs.length - MAX_EXACT} to run it.</p>
+          ) : roadLoading ? (
+            <p className="hint">Fetching walking distances…</p>
           ) : (
             frames && (
               <Player key={tab} frames={frames} onFrame={draw}>

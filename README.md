@@ -16,12 +16,18 @@ npm run build
 npm run bench    # 2-approximation vs Held–Karp on real pandal clusters
 ```
 
-Controls: ← / → step, Space plays. Distances are straight-line
-(great-circle), which satisfy the triangle inequality the 2× bound needs.
+Controls: ← / → step, Space plays.
+
+Distances: **Straight** (great-circle), or **Walking** along real roads —
+shortest walking routes from OSRM on OpenStreetMap data
+(routing.openstreetmap.de), with each edge drawn along its route. The walking
+matrix is closed under shortest paths, so it keeps the triangle inequality
+the 2× bound needs.
 
 ## Code
 
 - `src/lib/geo.js` — haversine distance matrix
+- `src/lib/roads.js` — walking distance matrix and route shapes (OSRM)
 - `src/lib/prim.js` — MST-PRIM + its step frames
 - `src/lib/doubleTree.js` — Euler tour → Hamiltonian cycle + frames
 - `src/lib/heldKarp.js` — exact DP + frames
